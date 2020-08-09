@@ -6,13 +6,14 @@
 
 //使用IIC    PB10,PB11
  
-#define SDA_IN()  {GPIOB->CRH&=0XFFFF0FFF;GPIOB->CRH|=0x00008000;}
-#define SDA_OUT() {GPIOB->CRH&=0XFFFF0FFF;GPIOB->CRH|=0x00007000;}	//开漏，推挽为3
+//#define SDA_IN()  {GPIOB->CRH&=0XFFFF0FFF;GPIOB->CRH|=0x00008000;}
+//#define SDA_OUT() {GPIOB->CRH&=0XFFFF0FFF;GPIOB->CRH|=0x00007000;}	//7为开漏，推挽为3
  
 //IO操作函数	 
-#define IIC_SCL    PBout(10) //SCL
-#define IIC_SDA    PBout(11) //SDA	 
-#define READ_SDA   PBin(11)  //输入SDA 
+#define IIC_SCL    PAout(2) //SCL
+#define IIC_SDA    PAout(3) //SDA	 
+//#define READ_SDA   PBin(11)  //输入SDA 
+#define READ_SDA  ((GPIOA->IDR & GPIO_Pin_3) != 0)	/* 读SDA口线状态 */
  
 
 

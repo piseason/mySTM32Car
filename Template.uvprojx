@@ -347,7 +347,7 @@
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
-            <Optim>1</Optim>
+            <Optim>2</Optim>
             <oTime>0</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>1</OneElfS>
@@ -365,7 +365,7 @@
               <MiscControls></MiscControls>
               <Define>USE_STDPERIPH_DRIVER,STM32F10X_MD,__USE_C99_MATH</Define>
               <Undefine></Undefine>
-              <IncludePath>.\User;.\Libraries\CMSIS;.\Libraries\STM32F10x_StdPeriph_Driver\inc;.\APP\led;.\Public;.\APP\pwm;.\USB\CONFIG;.\USB\STM32_USB-FS-Device_Driver\inc;.\APP\mpu6050</IncludePath>
+              <IncludePath>.\User;.\Public;.\Libraries\CMSIS;.\Libraries\STM32F10x_StdPeriph_Driver\inc;.\USB\CONFIG;.\USB\STM32_USB-FS-Device_Driver\inc;.\APP\led;.\APP\pwm;.\APP\mpu6050;.\APP\kalman</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -434,11 +434,6 @@
           <GroupName>StdPeriph_Driver</GroupName>
           <Files>
             <File>
-              <FileName>misc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\Libraries\STM32F10x_StdPeriph_Driver\src\misc.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_gpio.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Libraries\STM32F10x_StdPeriph_Driver\src\stm32f10x_gpio.c</FilePath>
@@ -449,19 +444,24 @@
               <FilePath>.\Libraries\STM32F10x_StdPeriph_Driver\src\stm32f10x_rcc.c</FilePath>
             </File>
             <File>
+              <FileName>misc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Libraries\STM32F10x_StdPeriph_Driver\src\misc.c</FilePath>
+            </File>
+            <File>
               <FileName>stm32f10x_exti.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Libraries\STM32F10x_StdPeriph_Driver\src\stm32f10x_exti.c</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_usart.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\Libraries\STM32F10x_StdPeriph_Driver\src\stm32f10x_usart.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_tim.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Libraries\STM32F10x_StdPeriph_Driver\src\stm32f10x_tim.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32f10x_usart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Libraries\STM32F10x_StdPeriph_Driver\src\stm32f10x_usart.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -494,14 +494,14 @@
               <FilePath>.\APP\pwm\pwm.c</FilePath>
             </File>
             <File>
-              <FileName>iompu6050.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\APP\mpu6050\iompu6050.c</FilePath>
-            </File>
-            <File>
               <FileName>PS2_SONY.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\APP\mpu6050\PS2_SONY.c</FilePath>
+            </File>
+            <File>
+              <FileName>iompu6050.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\APP\mpu6050\iompu6050.c</FilePath>
             </File>
             <File>
               <FileName>M5StickC.c</FileName>

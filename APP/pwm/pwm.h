@@ -16,7 +16,9 @@ extern volatile u16 cntR;
 
 void TIM1_PWM_Init(u16 arr, u16 psc);	//USART1占了PA9&10
 void TIM3_PWM_Init(u16 arr, u16 psc);
+void TIM2_CH12_PWM_Init(u16 arr,u16 psc);
 void TIM2_CH34_Input_Init(u16 arr,u16 psc);
+void TIM4_CH12_PWM_Init(u16 arr,u16 psc);
 void startSpeedCount(void);
 void TIM4_counter_Init(u16 arr,u16 psc);
 

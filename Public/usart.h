@@ -6,7 +6,6 @@
 
 void USART1_Init(u32 bound);
 
-
 #endif
 
 

@@ -1,4 +1,5 @@
 #include "usart.h"		 
+#include "string.h"
 
 int fputc(int ch,FILE *p)  //函数默认的，在使用printf函数时自动调用
 {
@@ -58,6 +59,8 @@ void USART1_Init(u32 bound)
 	NVIC_Init(&NVIC_InitStructure);	//根据指定的参数初始化VIC寄存器、	
 }
 
+
+
 /*******************************************************************************
 * 函 数 名         : USART1_IRQHandler
 * 函数功能		   : USART1中断函数
@@ -75,8 +78,3 @@ void USART1_IRQHandler(void)                	//串口1中断服务程序
 	} 
 	USART_ClearFlag(USART1,USART_FLAG_TC);
 } 	
-
- 
-
-
-

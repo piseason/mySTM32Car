@@ -7,14 +7,21 @@
 #include "M5StickC.h"
 #include "iompu6050.h" 
 
-float Kp = 2;
-float Ki = 0.1;
-float Kd = 0.4;
-
+//角度PID
+float Kp = 0;
+float Ki = 0;
+float Kd = 0;
+//速度PID
+float Kvp = 0;
+float Kvi = 0;
+float Kvd = 0;
+float thetaII,thetaV;
 
 float power = 0.0;
 
 float thetaP, thetaI, thetaD;
+
+float theta0, theta_dot0, theta, theta_dot, thetaOffset;
 
 
 int16_t accX = 0;
@@ -55,8 +62,8 @@ float theta_dot_variance;
 //=========================================================
 
 //カルマン・フィルタ処理 
-const float theta_update_freq = 100; //Hz
-const float theta_update_interval = 1.0/(theta_update_freq); //10msec
+const float theta_update_freq = 500; //Hz
+const float theta_update_interval = 1.0/(theta_update_freq); //2msec
 //状態ベクトルx
 //[[theta(degree)], [offset of theta_dot(degree/sec)]]
 //状態ベクトルの予測値
@@ -223,6 +230,7 @@ void offset_cal(){
   for(int i=0; i<10; i++) {
     MPU6050_Get_Accelerometer(&accY,&accX,&accZ);
     MPU6050_Get_Gyroscope(&gyroY,&gyroX,&gyroZ);
+		
     delay_ms(meas_interval);
     accXoffset += accX;
     accYoffset += accY;
@@ -234,7 +242,7 @@ void offset_cal(){
 
   accXoffset /= 10;
   accYoffset /= 10;
-	accZoffset = accZoffset / 10 - 16384;
+  accZoffset = accZoffset / 10 - 8192;
   gyroXoffset /= 10;
   gyroYoffset /= 10;
   gyroZoffset /= 10;
@@ -246,7 +254,7 @@ float get_acc_data() {
   MPU6050_Get_Accelerometer(&accY,&accX,&accZ);
   //得られたセンサ値はオフセット引いて使用
   //傾斜角導出 単位はdeg
-  theta_deg  = atan( (float)(accY - accYoffset) / (float)(-1 * accZ - accZoffset) ) * 57.29578f;
+  theta_deg  = atan2( (float)(-1*(accY - accYoffset)) , (float)(1 * (accZ - accZoffset)) ) * 57.29578f;
   return theta_deg;
 }
 
@@ -281,7 +289,7 @@ void acc_init(){
 float get_gyro_data() {
   MPU6050_Get_Gyroscope(&gyroY,&gyroX,&gyroZ);
   //得られたセンサ値はオフセット引いて使用
-  theta_dot = ((float) (gyroX - gyroXoffset)) / 16.384;
+  theta_dot = ((float) (gyroX - gyroXoffset)) / 65.536;
   return theta_dot;
 }
 
@@ -374,13 +382,26 @@ void update_theta()
     //角速度
     theta_dot2 = theta_dot_gyro - theta_data[1][0];
 		
-		//usb_printf("Offset:%d,%d,%d,%d,%d,%d\r\n",accXoffset,accYoffset,accZoffset,gyroXoffset,gyroYoffset,gyroZoffset);
+		//全局变量
+		theta0 = y; theta_dot0 = theta_dot_gyro;
+		theta = theta_data[0][0]; theta_dot = theta_dot2;
 		
-		//PID部分
-		thetaP = theta_data[0][0] / 90.0;
+		//PID部分,单位化
+		thetaP = theta_data[0][0] / 100.0;
 		thetaI += thetaP;
 		thetaD = theta_dot2 / 250.0;
-
+		
+		//校准部分
+//		usb_printf("Offset:%d,%d,%d,%d,%d,%d\r\n",accXoffset,accYoffset,accZoffset,gyroXoffset,gyroYoffset,gyroZoffset);
+//		MPU6050_Get_Accelerometer(&accX,&accY,&accZ);
+//    MPU6050_Get_Gyroscope(&gyroX,&gyroY,&gyroZ);
+//		usb_printf("Now:%d,%d,%d,%d,%d,%d\r\n",accX-accXoffset,accY-accYoffset,accZ-accZoffset,gyroX-gyroXoffset,gyroY-gyroYoffset,gyroZ-gyroZoffset);
+			//usb_printf("6050:%d,%d,%d,%d,%d,%d\r\n",accX,accY,accZ,gyroX,gyroY,gyroZ);
+		
+		//角度与角速度测量部分
+		//usb_printf("theta,dtheta:%7.3f,%7.3f\r\n",y,theta_dot_gyro);
+		
+		//控制部分
 //		power = thetaP * Kp + thetaI * Ki + thetaD * Kd;
 //		power = fmaxf(-1.0, fminf(1.0, power));
 
@@ -388,6 +409,178 @@ void update_theta()
 //		usb_printf("P=%7.3f,I=%7.3f,D=%7.3f,power=%7.3f,Vdata=%7.3f\r\n",thetaP,thetaI,thetaD,power,Vdata); 
 }
 
+void update_theta2(float thetaTar)
+{     
+    //加速度センサによる角度測定
+    float y = get_acc_data(); //degree
+    
+    //入力データ：角速度
+    float theta_dot_gyro = get_gyro_data(); //degree/sec
+      
+    //カルマン・ゲイン算出: G = P'C^T(W+CP'C^T)^-1
+    float P_CT[2][1] = {0};
+    float tran_C_theta[2][1] = {0};
+    mat_tran(C_theta[0], tran_C_theta[0], 1, 2);//C^T
+    mat_mul(P_theta_predict[0], tran_C_theta[0], P_CT[0], 2, 2, 2, 1);//P'C^T
+    float G_temp1[1][1] = {0};
+    mat_mul(C_theta[0], P_CT[0], G_temp1[0], 1,2, 2,1);//CP'C^T
+    float G_temp2 = 1.0f / (G_temp1[0][0] + theta_variance);//(W+CP'C^T)^-1
+    float G1[2][1] = {0};
+    mat_mul_const(P_CT[0], G_temp2, G1[0], 2, 1);//P'C^T(W+CP'C^T)^-1
+    
+    //傾斜角推定値算出: theta = theta'+G(y-Ctheta')
+    float C_theta_theta[1][1] = {0};
+    mat_mul(C_theta[0], theta_data_predict[0], C_theta_theta[0], 1, 2, 2, 1);//Ctheta'
+    float delta_y = y - C_theta_theta[0][0];//y-Ctheta'
+    float delta_theta[2][1] = {0};
+    mat_mul_const(G1[0], delta_y, delta_theta[0], 2, 1);
+    mat_add(theta_data_predict[0], delta_theta[0], theta_data[0], 2, 1);
+           
+    //共分散行列算出: P=(I-GC)P'
+    float GC[2][2] = {0};
+    float I2[2][2] = {{1,0},{0,1}};
+    mat_mul(G1[0], C_theta[0], GC[0], 2, 1, 1, 2);//GC
+    float I2_GC[2][2] = {0};
+    mat_sub(I2[0], GC[0], I2_GC[0], 2, 2);//I-GC
+    mat_mul(I2_GC[0], P_theta_predict[0], P_theta[0], 2, 2, 2, 2);//(I-GC)P'
+      
+    //次時刻の傾斜角の予測値算出: theta'=Atheta+Bu
+    float A_theta_theta[2][1] = {0};
+    float B_theta_dot[2][1] = {0};
+    mat_mul(A_theta[0], theta_data[0], A_theta_theta[0], 2, 2, 2, 1);//Atheta
+    mat_mul_const(B_theta[0], theta_dot_gyro, B_theta_dot[0], 2, 1);//Bu
+    mat_add(A_theta_theta[0], B_theta_dot[0], theta_data_predict[0], 2, 1);//Atheta+Bu 
+    
+    //次時刻の共分散行列算出: P'=APA^T + BUB^T
+    float AP[2][2] = {0};   
+    float APAT[2][2] = {0};
+    float tran_A_theta[2][2] = {0};
+    mat_tran(A_theta[0], tran_A_theta[0], 2, 2);//A^T 
+    mat_mul(A_theta[0], P_theta[0], AP[0], 2, 2, 2, 2);//AP
+    mat_mul(AP[0], tran_A_theta[0], APAT[0], 2, 2, 2, 2);//APA^T
+    float BBT[2][2];
+    float tran_B_theta[1][2] = {0};
+    mat_tran(B_theta[0], tran_B_theta[0], 2, 1);//B^T
+    mat_mul(B_theta[0], tran_B_theta[0], BBT[0], 2, 1, 1, 2);//BB^T
+    float BUBT[2][2] = {0};
+    mat_mul_const(BBT[0], theta_dot_variance, BUBT[0], 2, 2);//BUB^T
+    mat_add(APAT[0], BUBT[0], P_theta_predict[0], 2, 2);//APA^T+BUB^T
+
+    //角速度
+    theta_dot2 = theta_dot_gyro - theta_data[1][0];
+		
+		//全局变量
+		theta0 = y; theta_dot0 = theta_dot_gyro;
+		theta = theta_data[0][0]; theta_dot = theta_dot2;
+		
+		//PID部分,单位化
+		thetaP = (theta_data[0][0]-thetaTar) / 100.0;
+		thetaI += thetaP;
+		thetaD = theta_dot2 / 250.0;
+		
+		//角度与角速度测量部分
+		//usb_printf("6050:%d,%d,%d,%d,%d,%d\r\n",accX,accY,accZ,gyroX,gyroY,gyroZ);
+		//usb_printf("theta,dtheta:%7.3f,%7.3f\r\n",y,theta_dot_gyro);
+}
+
+#define iCount 20
+static float thetaI_buf[iCount]={0};
+void angleFilter(float tmpI)
+{
+    u8  i;
+  for(i = 1 ; i<iCount; i++) thetaI_buf[i - 1] = thetaI_buf[i];
+  thetaI_buf[iCount - 1] = tmpI;
+}
+
+void angleCorrection()
+{
+    u8  i;
+    float Sum_thetaI; 
+	
+	Sum_thetaI = 0;
+  for(i = 0 ; i < iCount; i++) Sum_thetaI += thetaI_buf[i];
+  Sum_thetaI /= iCount;
+  if(Sum_thetaI>0.5) thetaOffset-=0.1;
+  else if(Sum_thetaI<-0.5) thetaOffset+=0.1;
+	thetaOffset = fmaxf(-5.0, fminf(5.0, thetaOffset));	//在没有速度控制时，判断角度误差
+}
+
+void update_thetaEx(float thetaTar)
+{     
+    //加速度センサによる角度測定
+    float y = get_acc_data(); //degree
+    
+    //入力データ：角速度
+    float theta_dot_gyro = get_gyro_data(); //degree/sec
+      
+    //カルマン・ゲイン算出: G = P'C^T(W+CP'C^T)^-1
+    float P_CT[2][1] = {0};
+    float tran_C_theta[2][1] = {0};
+    mat_tran(C_theta[0], tran_C_theta[0], 1, 2);//C^T
+    mat_mul(P_theta_predict[0], tran_C_theta[0], P_CT[0], 2, 2, 2, 1);//P'C^T
+    float G_temp1[1][1] = {0};
+    mat_mul(C_theta[0], P_CT[0], G_temp1[0], 1,2, 2,1);//CP'C^T
+    float G_temp2 = 1.0f / (G_temp1[0][0] + theta_variance);//(W+CP'C^T)^-1
+    float G1[2][1] = {0};
+    mat_mul_const(P_CT[0], G_temp2, G1[0], 2, 1);//P'C^T(W+CP'C^T)^-1
+    
+    //傾斜角推定値算出: theta = theta'+G(y-Ctheta')
+    float C_theta_theta[1][1] = {0};
+    mat_mul(C_theta[0], theta_data_predict[0], C_theta_theta[0], 1, 2, 2, 1);//Ctheta'
+    float delta_y = y - C_theta_theta[0][0];//y-Ctheta'
+    float delta_theta[2][1] = {0};
+    mat_mul_const(G1[0], delta_y, delta_theta[0], 2, 1);
+    mat_add(theta_data_predict[0], delta_theta[0], theta_data[0], 2, 1);
+           
+    //共分散行列算出: P=(I-GC)P'
+    float GC[2][2] = {0};
+    float I2[2][2] = {{1,0},{0,1}};
+    mat_mul(G1[0], C_theta[0], GC[0], 2, 1, 1, 2);//GC
+    float I2_GC[2][2] = {0};
+    mat_sub(I2[0], GC[0], I2_GC[0], 2, 2);//I-GC
+    mat_mul(I2_GC[0], P_theta_predict[0], P_theta[0], 2, 2, 2, 2);//(I-GC)P'
+      
+    //次時刻の傾斜角の予測値算出: theta'=Atheta+Bu
+    float A_theta_theta[2][1] = {0};
+    float B_theta_dot[2][1] = {0};
+    mat_mul(A_theta[0], theta_data[0], A_theta_theta[0], 2, 2, 2, 1);//Atheta
+    mat_mul_const(B_theta[0], theta_dot_gyro, B_theta_dot[0], 2, 1);//Bu
+    mat_add(A_theta_theta[0], B_theta_dot[0], theta_data_predict[0], 2, 1);//Atheta+Bu 
+    
+    //次時刻の共分散行列算出: P'=APA^T + BUB^T
+    float AP[2][2] = {0};   
+    float APAT[2][2] = {0};
+    float tran_A_theta[2][2] = {0};
+    mat_tran(A_theta[0], tran_A_theta[0], 2, 2);//A^T 
+    mat_mul(A_theta[0], P_theta[0], AP[0], 2, 2, 2, 2);//AP
+    mat_mul(AP[0], tran_A_theta[0], APAT[0], 2, 2, 2, 2);//APA^T
+    float BBT[2][2];
+    float tran_B_theta[1][2] = {0};
+    mat_tran(B_theta[0], tran_B_theta[0], 2, 1);//B^T
+    mat_mul(B_theta[0], tran_B_theta[0], BBT[0], 2, 1, 1, 2);//BB^T
+    float BUBT[2][2] = {0};
+    mat_mul_const(BBT[0], theta_dot_variance, BUBT[0], 2, 2);//BUB^T
+    mat_add(APAT[0], BUBT[0], P_theta_predict[0], 2, 2);//APA^T+BUB^T
+
+    //角速度
+    theta_dot2 = theta_dot_gyro - theta_data[1][0];
+		
+		//全局变量
+		theta0 = y; theta_dot0 = theta_dot_gyro;
+		theta = theta_data[0][0]; theta_dot = theta_dot2;
+		
+		//PID部分,单位化
+		thetaP = (theta_data[0][0]-thetaOffset-thetaV-thetaTar) / 100.0;
+		thetaI += thetaP; angleFilter(thetaI);
+		//thetaII += (thetaI-thetaITar)/10;
+		thetaII += (thetaI)/10;
+		thetaII = fmaxf(-10.0, fminf(10.0, thetaII));
+		thetaD = theta_dot2 / 250.0;
+		
+		//角度与角速度测量部分
+		//usb_printf("6050:%d,%d,%d,%d,%d,%d\r\n",accX,accY,accZ,gyroX,gyroY,gyroZ);
+		//usb_printf("theta,dtheta:%7.3f,%7.3f\r\n",y,theta_dot_gyro);
+}
 
 //カルマンフィルタの初期設定 初期姿勢は0°(直立)を想定
 void ini_theta(){
